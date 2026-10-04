@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Alert, AppState, Linking } from 'react-native';
 import { Stack } from 'expo-router';
 import { ensureBluetoothReady, openBluetoothAppSettings } from '../src/obd/bluetoothManager';
+import { midEsp32Connection } from '../src/obd/midEsp32Connection';
 import { gpsTracker } from '../src/gps';
 
 export default function RootLayout() {
@@ -63,6 +64,7 @@ export default function RootLayout() {
 
     const startup = async () => {
       await checkBluetooth();
+      midEsp32Connection.start();
       await startGps();
     };
 
@@ -74,6 +76,7 @@ export default function RootLayout() {
 
     return () => {
       subscription.remove();
+      void midEsp32Connection.stop();
       void gpsTracker.stop();
     };
   }, []);
