@@ -3,92 +3,113 @@
 ## Visão geral
 
 ```
-                    +------------------+
-                    |    Root Layout   |
-                    | Bluetooth + GPS  |
-                    +--------+---------+
-                             |
-              +--------------+--------------+
-              |                             |
-              v                             v
-      Bluetooth Manager                 GpsTracker
-              |                             |
-              v                             v
-   BluetoothClassicTransport          GPS celular
-              |
-              v
-        Elm327Session
-          |       |
-          v       v
-    PID Discovery DTC
-          \       /
-           v     v
-             Parser
-                |
-        RAW + Interpretado
-                |
-      +---------+---------+
-      |         |         |
-      v         v         v
-     PID       DTC      Histórico
-      |         |         |
-      +---------+---------+
-                |
-          Autosave/Backup
+                    +----------------------+
+                    | Android MID          |
+                    | UI + GPS + Storage   |
+                    +----------+-----------+
+                               |
+                         Bluetooth SPP
+                               |
+                               v
+                    +----------------------+
+                    | ESP32-WROOM-32E       |
+                    | SPP + OBD + K-Line   |
+                    +----------+-----------+
+                               |
+                         transceptor
+                               |
+                               v
+                         ECU Meriva
 ```
 
-## Camadas
+## Android
 
 ### UI
 
-`app/` contém as telas do aplicativo.
+`app/` contém as telas.
 
 ### GPS
 
-`src/gps/` concentra o rastreador em primeiro plano, permissões, filtragem de precisão, cálculo de distância e conversão de velocidade.
-
-O `GpsTracker` é singleton no runtime para não parar ao navegar entre telas. O cálculo de consumo recebe quilômetros do GPS e só usa litros fornecidos por uma fonte válida.
+`src/gps/` mantém o rastreamento em primeiro plano.
 
 ### OBD
 
-`src/obd/` concentra transporte Bluetooth Classic, sessão ELM327, parser, definições de PID e descoberta.
+`src/obd/` contém:
 
-A recepção Bluetooth usa o listener de dados como fonte única. A `Elm327Session` serializa comandos para evitar interleaving de respostas.
+- Bluetooth Classic
+- conexão persistente com ESP32
+- sessão compatível com comandos ELM327
+- parser
+- PIDs
+- DTC
+- descoberta
 
 ### Dados
 
-`src/database/` contém persistência, DTC, banco de PIDs, aprendizado e configuração do veículo.
-
-### Meriva
-
-`src/meriva/` contém o estado persistido e o autosave.
+`src/database/` contém persistência e conhecimento local.
 
 ### Storage
 
-`src/storage/` controla quota, limpeza, backups e ciclos de condução.
+`src/storage/` controla quota, limpeza, backup e ciclos.
 
-### Tipos
+### Autosave
 
-`src/types/` contém contratos compartilhados. `DtcRecord` é definido uma única vez em `sourceTypes.ts`.
+`src/meriva/` controla o autosave.
+
+## ESP32
+
+`esp32/` é o novo núcleo embarcado.
+
+Responsabilidades:
+
+1. Bluetooth Classic SPP
+2. fila de comandos
+3. interface de comando compatível com ELM327
+4. UART K-Line
+5. temporização do protocolo
+6. captura TX/RX
+7. estado da ECU
+
+## Estados
+
+O aplicativo deve distinguir:
+
+```
+Bluetooth ligado
+      ↓
+ESP32 conectado
+      ↓
+ESP32 respondendo
+      ↓
+K-Line inicializada
+      ↓
+ECU respondendo
+      ↓
+protocolo identificado
+      ↓
+OBD pronto
+```
+
+Nunca usar apenas "conectado".
+
+## K-Line
+
+A Meriva do projeto tem histórico de comunicação ISO 14230-4 KWP Fast Init em K-Line.
+
+O firmware começa em 10400 baud 8N1.
+
+O handshake físico será implementado e validado separadamente.
 
 ## Regra de confiança
 
-O fluxo de dados mantém a origem explícita:
+`REAL_OBD`, `SIMULACAO` e demais origens permanecem explícitos.
 
-`REAL_OBD`, `SIMULACAO`, `CARSCANNER_BASELINE` e outros tipos definidos em `sourceTypes.ts`.
+O ESP32 não deve fabricar valores.
 
-Somente dados reais podem alimentar o aprendizado real do veículo.
+Sem resposta real:
 
-## Estado Bluetooth
+- timeout
+- `NO DATA`
+- erro
 
-O estado não deve ser resumido a "conectado". O diagnóstico precisa separar Bluetooth, ELM327 e ECU.
-
-## Autosave
-
-O autosave escreve primeiro em arquivo temporário, valida o conteúdo e só então atualiza o arquivo principal. O arquivo anterior é mantido como recuperação.
-
-## Limite atual
-
-A aplicação exige build nativo Android por usar Bluetooth Classic. Expo Go não é suficiente para validar o transporte.
-
-A disponibilidade dos PIDs, a qualidade do GPS e a comunicação com a ECU da Meriva dependem do hardware físico e devem ser confirmadas no veículo.
+Nunca estimativa silenciosa.
