@@ -22,6 +22,8 @@ export interface BluetoothConnectionState {
   error?: string;
 }
 
+export const MID_ESP32_DEVICE_NAME = 'MERIVA-MID-ESP32';
+
 export interface RealElmConnection {
   session: Elm327Session;
   initialization: ElmCommandResult[];
@@ -95,6 +97,23 @@ export async function openBluetoothAppSettings(): Promise<void> {
 export async function discoverPairedDevices(): Promise<BluetoothDeviceInfo[]> {
   await ensureBluetoothReady();
   return listBondedBluetoothDevices();
+}
+
+export async function connectToMerivaMidEsp32(): Promise<RealElmConnection> {
+  await ensureBluetoothReady();
+
+  const devices = await listBondedBluetoothDevices();
+  const device = devices.find(
+    (candidate) => candidate.name.trim().toUpperCase() === MID_ESP32_DEVICE_NAME,
+  );
+
+  if (!device) {
+    throw new Error(
+      'ESP32 DO MERIVA MID NÃO ESTÁ PAREADO. PAREIE O DISPOSITIVO MERIVA-MID-ESP32 NO ANDROID.',
+    );
+  }
+
+  return createRealElmSession(device);
 }
 
 export async function createRealElmSession(device: BluetoothDeviceInfo): Promise<RealElmConnection> {
