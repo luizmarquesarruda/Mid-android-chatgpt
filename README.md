@@ -1,86 +1,127 @@
-# MERIVA MID Android + ESP32
+# Smart MID Chevrolet Meriva
 
-Base oficial do **Meriva MID**.
+Este é o repositório do **Smart MID físico da Chevrolet Meriva**, usando o **ESP32-WROOM-32E** e o **TID original do veículo**.
 
-O projeto agora tem duas camadas:
+O aplicativo Android é um projeto separado. Ele não define o funcionamento básico do MID físico.
 
-- **Android**: interface, GPS, armazenamento, autosave e diagnóstico.
-- **ESP32-WROOM-32E**: núcleo embarcado de comunicação com a ECU.
-
-## Arquitetura atual
+## Arquitetura do produto
 
 ```
-Android MID
-    │ Bluetooth Classic / SPP
-    ▼
-ESP32-WROOM-32E
-    │ UART2
-    ▼
-Transceptor K-Line
-    │
-    ▼
-ECU Meriva
+                  SMART MID FÍSICO
+
+              ┌───────────────────┐
+              │ ESP32-WROOM-32E   │
+              │ núcleo do MID     │
+              └───────┬─────┬─────┘
+                      │     │
+                    K-Line  TID
+                      │     │
+                      ▼     ▼
+                     ECU  Display
 ```
 
-O Android procura automaticamente o dispositivo Bluetooth Classic:
+### ESP32
 
-`MERIVA-MID-ESP32`
+Responsável pelo núcleo embarcado:
 
-Depois da conexão, o ESP32 apresenta uma interface de comandos compatível com o modelo ELM327 usado pelo núcleo OBD do aplicativo.
+- comunicação com a ECU;
+- K-Line / ISO 14230-4;
+- controle do TID;
+- estado do sistema;
+- GNSS, quando integrado;
+- SD, quando integrado;
+- buzzer;
+- alimentação/ignição e desligamento controlado;
+- Bluetooth apenas como interface complementar.
 
-## Regra de hardware
+### TID original
 
-A K-Line não pode ser ligada diretamente ao ESP32. Ela trabalha em nível automotivo e precisa de transceptor/proteção apropriados.
+O TID da Meriva continua sendo o display principal do projeto.
 
-ESP32 de referência:
+Não será substituído por OLED ou LCD externo.
 
-- ESP32-WROOM-32E
-- Bluetooth Classic
-- GPIO 16: RX K-Line
-- GPIO 17: TX K-Line
+O protocolo do TID será implementado somente depois de ser medido e validado no hardware real.
 
-## Estado do desenvolvimento
+## Separação do Android
 
-### Implementado
+O Android fica fora do núcleo físico.
 
-- estrutura de firmware ESP32
-- Bluetooth Classic SPP
-- nome `MERIVA-MID-ESP32`
-- camada inicial de comandos AT
-- conexão automática Android → ESP32
-- GPS automático
-- armazenamento local
-- núcleo OBD existente
+```
+MID físico ─────► funciona sozinho
+     ▲
+     │ Bluetooth opcional
+     ▼
+Android ────────► configuração / diagnóstico / registro
+```
 
-### Próximo marco
+Não há dependência do Android para o MID funcionar.
 
-Implementar e validar fisicamente o KWP Fast Init da Meriva.
+## Hardware inicial
 
-Só depois disso liberar PIDs reais.
+- ESP32-WROOM-32E / ESP32 clássico
+- TID original da Meriva
+- transceptor K-Line automotivo
+- proteção e regulador automotivo
+- conector original/pass-through
+- SD e GNSS conforme a revisão do hardware
 
-Nenhum dado de ECU será inventado.
+### Pinagem de referência
 
-## Validação
+| Função | GPIO |
+|---|---:|
+| K-Line RX | 16 |
+| K-Line TX | 17 |
+| TID SDA | 33 |
+| TID SCL | 32 |
+| TID MRQ | 27 |
+| GNSS PPS | 4 |
+| Buzzer | 26 |
+| IGN | 35 |
+| SD CS | 5 |
+| SD SCK | 18 |
+| SD MISO | 19 |
+| SD MOSI | 23 |
 
-Build de software não significa validação automotiva.
+A pinagem GNSS UART antiga não deve ser usada junto com K-Line nos GPIO 16/17 sem uma decisão de remapeamento.
 
-A confirmação final exige:
+## Segurança elétrica
 
-1. ESP32 físico
-2. transceptor K-Line
-3. Android físico
-4. Meriva física
-5. captura TX/RX
-6. resposta real da ECU
+**Nunca ligue a K-Line diretamente ao ESP32.**
 
-## Organização
+Use transceptor automotivo apropriado e proteção de alimentação.
 
-- `app/` UI Android
-- `src/gps/` GPS
-- `src/obd/` Bluetooth, sessão OBD e parser
-- `src/storage/` armazenamento
-- `src/meriva/` autosave
-- `esp32/` firmware embarcado
-- `docs/` arquitetura e procedimentos
+## Estado atual
 
-O objetivo é transformar o aplicativo atual no painel Android do **Meriva MID**, enquanto o ESP32 assume o trabalho próximo à ECU.
+Já existe:
+
+- base PlatformIO;
+- firmware ESP32;
+- Bluetooth Classic SPP;
+- interface inicial de comandos;
+- camada inicial do TID;
+- UART K-Line em 10400 baud;
+- documentação da arquitetura física.
+
+Ainda **não** está validado:
+
+- protocolo de escrita do TID;
+- circuito elétrico final;
+- KWP Fast Init no veículo;
+- resposta real da ECU;
+- leitura de PIDs;
+- integração final do TID com os dados da ECU.
+
+## Ordem de trabalho
+
+1. validar hardware e alimentação;
+2. validar interface do TID original;
+3. capturar e documentar o protocolo do TID;
+4. implementar escrita segura no TID;
+5. validar transceptor K-Line;
+6. implementar KWP Fast Init;
+7. validar comunicação real com a ECU;
+8. implementar primeiro PID real, começando por RPM;
+9. levar dados reais ao TID;
+10. adicionar GNSS, SD e Bluetooth complementar.
+
+**Regra:** sem dado real, o MID não inventa valor.
