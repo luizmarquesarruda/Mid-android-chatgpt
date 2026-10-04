@@ -16,56 +16,83 @@ npx expo prebuild --clean --platform android --non-interactive
 npx expo run:android
 ```
 
-O adaptador ELM327 deve estar pareado nas configurações do Android antes do teste.
+O Android final usa Bluetooth Classic para falar com o ESP32.
 
-## Teste Bluetooth
+Dispositivo esperado:
 
-1. Abra o aplicativo com Bluetooth desligado.
-2. Verifique a solicitação de ativação.
-3. Conceda acesso a dispositivos próximos.
-4. Ligue o Bluetooth.
-5. Liste dispositivos pareados.
-6. Selecione o ELM327.
-7. Conecte e aguarde a inicialização AT.
-8. Confirme o protocolo retornado por ATDP.
-9. Execute um PID.
-10. Verifique TX/RX, tempo e status.
-11. Teste a descoberta de PIDs.
-12. Leia os DTCs atuais.
+`MERIVA-MID-ESP32`
 
-A recepção do Bluetooth deve ocorrer pelo listener de dados. O transporte não deve misturar `onDataReceived` com `available()/read()`.
+O aplicativo inicia uma tentativa persistente de conexão enquanto estiver ativo. Se o ESP32 ainda não estiver pareado, o app continua tentando sem fabricar estado de conexão.
+
+## ESP32
+
+Diretório:
+
+`esp32/`
+
+Build com PlatformIO:
+
+```bash
+pio run -d esp32
+pio run -d esp32 --target upload
+pio device monitor -d esp32
+```
+
+Hardware de referência:
+
+- ESP32-WROOM-32E
+- UART2 RX GPIO 16
+- UART2 TX GPIO 17
+- Bluetooth Classic SPP
+
+## K-Line
+
+A interface elétrica deve usar transceptor automotivo.
+
+Não conectar o pino OBD-II K-Line diretamente a GPIO.
+
+A primeira validação será feita em UART 10400 8N1. O KWP Fast Init será implementado depois da confirmação do circuito físico.
+
+## Comunicação Android → ESP32
+
+O Android usa o mesmo modelo de comandos do núcleo OBD:
+
+```
+ATZ
+ATI
+ATE0
+ATL0
+ATS0
+ATH1
+ATSP0
+ATDP
+```
+
+O firmware inicial responde a esses comandos.
+
+Comandos OBD retornam `NO DATA` até que o caminho K-Line real esteja validado.
+
+Isso é proposital.
 
 ## Teste GPS
 
-1. Abra o aplicativo com a localização do Android ligada.
-2. Conceda permissão de localização em primeiro plano.
-3. Confirme que o cartão GPS mostra `ATIVO AUTOMÁTICO`.
-4. Caminhe ou dirija em área aberta e confira velocidade, precisão e distância.
-5. Desative a localização e confirme que o app informa a falha.
-6. Volte de Configurações do Android para o app e confira a tentativa automática de recuperação.
+1. Abra o aplicativo.
+2. Autorize localização em primeiro plano.
+3. Confirme GPS automático.
+4. Confira distância em km.
+5. Confira precisão.
+6. Não derive litros consumidos somente do GPS.
 
-O GPS mede velocidade e distância. Litros consumidos não devem ser inventados a partir de GPS.
+## Critério de hardware
 
-## Teste sem veículo
+Um teste é considerado real somente quando:
 
-Use o transporte simulado somente para testes de software. Toda saída simulada deve permanecer marcada como simulação e não alimentar aprendizado real.
+- Bluetooth Classic conectou ao ESP32 físico;
+- ESP32 respondeu aos comandos AT;
+- K-Line foi inicializada;
+- ECU respondeu;
+- TX/RX bruto foi registrado.
 
-## Diagnóstico de falhas
+## Regra
 
-Se Bluetooth funcionar mas o ELM não responder, o problema não deve ser apresentado como falha da ECU.
-
-Se o ELM responder e a ECU não responder, registre a ausência de resposta.
-
-Se a ECU responder mas o parser não reconhecer o PID, registre `VALOR NÃO INTERPRETADO`.
-
-Se um PID não estiver na resposta de descoberta, não assuma que ele é suportado pela ECU.
-
-## Testes automatizados
-
-`npm test` cobre autosave, parser, DTC, descoberta de PIDs, serialização ELM, transporte Bluetooth por eventos, storage e GPS.
-
-## CI
-
-O GitHub Actions executa instalação, Expo Doctor, TypeScript, testes e montagem de um APK debug com Java 17.
-
-A validação física do Bluetooth e do GPS continua exigindo um Android real.
+Nunca transformar timeout, `NO DATA` ou PID desconhecido em valor estimado.
