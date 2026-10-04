@@ -1,28 +1,86 @@
-# MID Android ChatGPT
+# MERIVA MID Android + ESP32
 
-Nova base do projeto para a futura integração com Android Auto.
+Base oficial do **Meriva MID**.
 
-Este repositório é um clone da V1 do Meriva Smart Diagnostic. O que funcionar na V1 permanece. O que falhar será corrigido aqui.
+O projeto agora tem duas camadas:
 
-## Origem
-- Projeto-base: `luizmarquesarruda/meriva-smart-diagnostic`
-- Android / React Native / Expo
-- Bluetooth Classic / ELM327
-- OBD-II real
-- GPS
-- DTC
-- autosave e histórico
+- **Android**: interface, GPS, armazenamento, autosave e diagnóstico.
+- **ESP32-WROOM-32E**: núcleo embarcado de comunicação com a ECU.
 
-## Objetivo
-Adicionar Android Auto sem duplicar o núcleo de diagnóstico.
+## Arquitetura atual
 
-`núcleo Meriva -> Phone UI`
-`núcleo Meriva -> Android Auto UI`
+```
+Android MID
+    │ Bluetooth Classic / SPP
+    ▼
+ESP32-WROOM-32E
+    │ UART2
+    ▼
+Transceptor K-Line
+    │
+    ▼
+ECU Meriva
+```
 
-A integração Android Auto ainda não está implementada. Primeiro serão feitos build, testes automatizados, instalação, teste Bluetooth + ELM327 na Meriva, GPS, autosave e registro das falhas.
+O Android procura automaticamente o dispositivo Bluetooth Classic:
 
-Não usar scraping do Waze ou Google Maps. Integrações externas somente por APIs oficiais comprovadas.
+`MERIVA-MID-ESP32`
 
-O conhecimento validado será usado depois como base empírica do `Meriva-smart-mid`.
+Depois da conexão, o ESP32 apresenta uma interface de comandos compatível com o modelo ELM327 usado pelo núcleo OBD do aplicativo.
 
-Fluxo: **Diagnostic V1 -> testes reais -> correções -> APK -> Android Auto V2 -> Smart MID**
+## Regra de hardware
+
+A K-Line não pode ser ligada diretamente ao ESP32. Ela trabalha em nível automotivo e precisa de transceptor/proteção apropriados.
+
+ESP32 de referência:
+
+- ESP32-WROOM-32E
+- Bluetooth Classic
+- GPIO 16: RX K-Line
+- GPIO 17: TX K-Line
+
+## Estado do desenvolvimento
+
+### Implementado
+
+- estrutura de firmware ESP32
+- Bluetooth Classic SPP
+- nome `MERIVA-MID-ESP32`
+- camada inicial de comandos AT
+- conexão automática Android → ESP32
+- GPS automático
+- armazenamento local
+- núcleo OBD existente
+
+### Próximo marco
+
+Implementar e validar fisicamente o KWP Fast Init da Meriva.
+
+Só depois disso liberar PIDs reais.
+
+Nenhum dado de ECU será inventado.
+
+## Validação
+
+Build de software não significa validação automotiva.
+
+A confirmação final exige:
+
+1. ESP32 físico
+2. transceptor K-Line
+3. Android físico
+4. Meriva física
+5. captura TX/RX
+6. resposta real da ECU
+
+## Organização
+
+- `app/` UI Android
+- `src/gps/` GPS
+- `src/obd/` Bluetooth, sessão OBD e parser
+- `src/storage/` armazenamento
+- `src/meriva/` autosave
+- `esp32/` firmware embarcado
+- `docs/` arquitetura e procedimentos
+
+O objetivo é transformar o aplicativo atual no painel Android do **Meriva MID**, enquanto o ESP32 assume o trabalho próximo à ECU.
