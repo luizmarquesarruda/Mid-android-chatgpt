@@ -10,28 +10,32 @@ Ele é separado do aplicativo Android.
 - TID original da Meriva
 - interface K-Line automotiva
 - alimentação automotiva protegida
+- PCB própria, sem adaptador externo no uso normal
 
 ## Arquitetura
 
 ```
-                    SMART MID FÍSICO
-┌───────────────────────────────────────────────┐
-│                                               │
-│  Alimentação ──► ESP32-WROOM-32E              │
-│                       │                       │
-│              ┌────────┴────────┐              │
-│              ▼                 ▼              │
-│         K-Line ECU          TID original      │
-│              │                 │              │
-│              ▼                 ▼              │
-│             ECU            Display MID        │
-│                                               │
-└───────────────────────────────────────────────┘
+CHICOTE MERIVA
+      |
+      v
++-----------------------------+
+| SMART MID PCB                |
+|                             |
+| proteção +30 / IGN          |
+| regulador 3V3               |
+| ESP32-WROOM-32E             |
+| interface TID               |
+| transceptor K-Line          |
+| GNSS / SD / buzzer          |
++-------------+---------------+
+              |
+              v
+        TID ORIGINAL
 ```
 
-## Pinagem de referência
+A PCB faz a interface física. O ESP32 não deve receber diretamente sinais automotivos fora de sua faixa elétrica.
 
-### ESP32
+## Pinagem de referência
 
 | Função | GPIO |
 |---|---:|
@@ -40,8 +44,6 @@ Ele é separado do aplicativo Android.
 | TID SDA | 33 |
 | TID SCL | 32 |
 | TID MRQ | 27 |
-| GNSS RX | 16* |
-| GNSS TX | 17* |
 | GNSS PPS | 4 |
 | Buzzer | 26 |
 | IGN | 35 |
@@ -50,58 +52,145 @@ Ele é separado do aplicativo Android.
 | SD MISO | 19 |
 | SD MOSI | 23 |
 
-* A pinagem GNSS acima não pode coexistir com K-Line na mesma UART sem remapeamento. Ela é uma referência histórica do projeto e deve ser resolvida antes do esquemático final.
+### Conflito GNSS/K-Line
+
+GPIO16/17 estão reservados como UART de referência para K-Line.
+
+A pinagem histórica do GNSS também usava 16/17. Portanto, **não fechar o PCB com GNSS UART nesses pinos**.
+
+O UART do GNSS deverá ser remapeado antes da revisão elétrica final.
+
+## Alimentação
+
+### +30 permanente
+
+O +30 será tratado na própria PCB com:
+
+1. proteção de entrada;
+2. proteção contra inversão;
+3. proteção contra transientes;
+4. filtragem;
+5. alimentação original do TID conforme validação;
+6. regulador para 3V3 do ESP32.
+
+Os valores dos componentes ainda não devem ser congelados sem validação elétrica e térmica.
+
+### +15 pós-chave
+
+O +15 serve para detectar ignição.
+
+GPIO35 é entrada-only no ESP32 clássico. A entrada deverá receber proteção e adequação de nível na PCB.
+
+**Nunca aplicar 12 V diretamente ao GPIO35.**
 
 ## TID
 
-O TID continua sendo o display original do carro.
+Referência de conexão:
 
-A interface elétrica planejada é:
+- SDA → GPIO33
+- SCL → GPIO32
+- MRQ → GPIO27
 
-- SDA: GPIO 33
-- SCL: GPIO 32
-- MRQ: GPIO 27
+A interface elétrica ficará integrada à PCB.
 
-**Importante:** a pinagem acima não significa que o protocolo de mensagens já esteja validado.
+Ainda precisam ser medidos:
 
-O próximo trabalho do TID é descobrir/confirmar:
+- níveis de SDA/SCL/MRQ;
+- pull-ups;
+- direção dos sinais;
+- temporização;
+- sequência de inicialização;
+- endereço;
+- formato das mensagens;
+- comportamento no desligamento.
 
-1. níveis elétricos;
-2. direção dos sinais;
-3. temporização;
-4. sequência de inicialização;
-5. comandos de texto;
-6. atualização parcial;
-7. comportamento de desligamento.
-
-Não devemos enviar comandos arbitrários ao TID.
+Não enviar bytes arbitrários ao TID.
 
 ## K-Line
 
-A K-Line da ECU não pode ser ligada diretamente ao ESP32.
+A K-Line da ECU será ligada a um **transceptor K-Line automotivo dedicado**, instalado na PCB.
 
-Usar transceptor automotivo apropriado e proteção de alimentação.
+```
+ECU K-Line
+    |
+proteção
+    |
+transceptor K-Line
+    |
+UART ESP32
+```
 
-A comunicação da Meriva será tratada como ISO 14230-4 KWP Fast Init, até validação do veículo.
+**Nunca ligar K-Line diretamente a um GPIO do ESP32.**
+
+Referência atual:
+
+- RX = GPIO16
+- TX = GPIO17
+- 10400 baud
+- 8N1
+- ISO 14230-4 KWP Fast Init
+
+## Periféricos
+
+| Função | GPIO | Estado |
+|---|---:|---|
+| Buzzer | 26 | previsto |
+| IGN | 35 | previsto, entrada protegida |
+| SD CS | 5 | previsto, revisar strap de boot |
+| SD SCK | 18 | previsto |
+| SD MISO | 19 | previsto |
+| SD MOSI | 23 | previsto |
+| GNSS PPS | 4 | previsto |
+| I2C geral | 21/22 | reservado |
+
+GPIO5 é pino de strap do ESP32 clássico. O circuito do SD deve ser revisado para não forçar estado de boot incorreto.
+
+## Pontos de teste
+
+A Rev A deve ter pontos de teste para:
+
+- +30;
+- +15/IGN;
+- 3V3;
+- GND;
+- TID SDA;
+- TID SCL;
+- TID MRQ;
+- K-Line;
+- UART TX/RX do K-Line.
+
+## Validação de bancada
+
+Antes do veículo:
+
+1. inspeção visual;
+2. continuidade;
+3. teste de curto;
+4. alimentação limitada;
+5. validação de 3V3;
+6. teste do ESP32;
+7. teste da entrada IGN;
+8. captura passiva do TID;
+9. teste do transceptor K-Line;
+10. somente então ligação ao veículo.
 
 ## Ordem de desenvolvimento
 
-1. alimentação protegida;
-2. ESP32 isolado;
-3. interface TID;
-4. captura/validação do protocolo TID;
-5. K-Line física;
-6. KWP Fast Init;
-7. primeiro PID real;
-8. integração de dados no TID;
-9. GNSS;
-10. SD;
-11. Bluetooth opcional para diagnóstico/configuração.
+1. fechar arquitetura elétrica Rev A;
+2. validar alimentação;
+3. validar interface elétrica do TID;
+4. capturar protocolo real do TID;
+5. fechar transceptor K-Line;
+6. implementar KWP Fast Init;
+7. validar ECU real;
+8. implementar primeiro PID real: RPM;
+9. exibir dados reais no TID;
+10. resolver GNSS;
+11. integrar SD;
+12. Bluetooth apenas como interface complementar.
 
 ## Regra principal
 
 O Smart MID físico deve funcionar sem depender do Android.
 
-O Android é uma ferramenta complementar de configuração, diagnóstico e registro.
-
-Nenhum valor de veículo será fabricado quando a fonte real não estiver disponível.
+Sem dado real, o MID não inventa valor.
