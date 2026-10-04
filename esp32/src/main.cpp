@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <BluetoothSerial.h>
+#include "tidDisplay.h"
 
 BluetoothSerial SerialBT;
 
@@ -8,6 +9,9 @@ static constexpr int KLINE_TX_PIN = 17;
 static constexpr uint32_t KLINE_BAUD = 10400;
 
 HardwareSerial KLine(2);
+
+static constexpr int IGN_PIN = 35;
+static constexpr int BUZZER_PIN = 26;
 
 String rxLine;
 
@@ -58,6 +62,13 @@ void handleCommand(const String& raw) {
 void setup() {
   Serial.begin(115200);
   delay(200);
+
+  pinMode(IGN_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  TidDisplay::begin();
+  TidDisplay::showBoot();
 
   KLine.begin(KLINE_BAUD, SERIAL_8N1, KLINE_RX_PIN, KLINE_TX_PIN);
 
